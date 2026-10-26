@@ -1,29 +1,23 @@
-<!--
-OVERVIEW.md is required to list your plugin in the registry. Keep it beside
-paseo-plugin.json in your repository at the pinned commit and in your npm package.
-Replace this comment with useful facts before publishing.
+NPM Scripts adds a panel to the Explorer sidebar that lists the scripts in your project's `package.json` files and runs them with one press. It works like the npm scripts view in VS Code, for the workspace you have selected. Needs Paseo 0.13 or later.
 
-This overview is for people choosing a plugin in Paseo, on the plugin page under
-its install command. README assumes a GitHub audience and includes technical
-details, installation instructions, and badges. Long, AI-generated READMEs leave
-people reading past that material to understand what the plugin does.
+The panel scans the selected workspace's folder for every `package.json`, including nested packages in a monorepo such as `apps/backend`. Each package gets its own card with its path and package manager, and the root `package.json` is always the first card, marked Root. Packages without scripts are left out. Press Refresh after you add or change a script.
 
-Write these parts in order, including only what helps someone decide to install:
+Run uses the package manager the project declares in the `packageManager` field. Without one, it looks for the nearest lockfile: `pnpm-lock.yaml` for pnpm, `yarn.lock` for Yarn, `bun.lock` or `bun.lockb` for Bun, and npm otherwise. A subpackage looks upward to the workspace root, so a monorepo with one lockfile at the root uses that package manager everywhere.
 
-1. Describe what your plugin is and does in plain terms first.
-2. Explain how it works only when it is not obvious.
-3. Explain setup when needed: settings, accounts, tokens, providers, tools, or
-   other plugins. Include applicable daemon version and operating system
-   requirements. Setup guidance is allowed; installation instructions are not.
-4. Explain capabilities and settings worth understanding, what each option does,
-   what the plugin reads or sends and where, permissions, and known limits.
+## Terminals
 
-Length follows complexity; a theme needs one paragraph. Choose headings only
-when they help. Use sentence case and plain factual language, with no em dashes.
-Omit installation commands, badges, changelog, contributing or license sections,
-marketing, and unsupported claims. Avoid implementation filler such as empty
-cleanup functions, theme-token field lists, or lists of absent features.
+Scripts run in a workspace terminal named `npm scripts`, or `npm scripts · apps/backend` for a subpackage, opened in that package's folder. Output stays in the terminal, and you stop a script there with Ctrl-C.
 
-To translate the overview, add a whole copy beside this file named for the
-language, such as OVERVIEW.zh-CN.md. Readers in that language see it instead.
--->
+Press Run again and the panel reuses one of these terminals when its last script has finished, including one you stopped with Ctrl-C. While a script is still running, for example a dev server, Run opens another terminal. To tell when a script has finished, the panel adds a short `echo` after each command and reads the end of the terminal. It never types into terminals you opened yourself.
+
+## Data and permissions
+
+The plugin reads `package.json` and lockfiles on the computer running the Paseo daemon and sends nothing outside Paseo. It skips `node_modules`, `dist`, `build`, `out`, `coverage` and hidden folders, and looks at most four folders deep. Run types the script command into a terminal that runs as your daemon user.
+
+## Limits
+
+- A worktree shows the scripts in that worktree's folder, not the main checkout.
+- Paseo does not tell plugins a script's exit code, so the panel can't show whether a script passed or failed.
+- A reused terminal does not move to the front. Open its tab to see the output.
+- If you type a command into an `npm scripts` terminal by hand and it prints nothing, the panel can treat that terminal as free.
+- Commands use POSIX shell syntax and work in zsh and bash. They don't work in fish.
