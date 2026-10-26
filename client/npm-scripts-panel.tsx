@@ -1,10 +1,11 @@
 import type { PluginWorkspacePanelProps } from "@getpaseo/plugin/client";
 import { usePaseo, useRpc, useWorkspace } from "@getpaseo/plugin/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import type { NpmScriptPackage } from "../shared/npm-scripts";
 import { listNpmScriptsRpc } from "../shared/npm-scripts";
+import { captureTail, isIdleCapture, scriptCommand, scriptTerminalName } from "../shared/terminal-reuse";
 
 type RunRequest = { pkg: NpmScriptPackage; script: NpmScriptPackage["scripts"][number] };
 
@@ -12,15 +13,11 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unknown error";
 }
 
-// why: the command runs in an interactive shell, so the name is quoted for POSIX sh.
-function shellQuote(value: string) {
-  return "'" + value.replace(/'/g, "'\\''") + "'";
-}
-
 export function NpmScriptsPanel({ workspaceId, theme }: PluginWorkspacePanelProps) {
   const directory = useWorkspace(workspaceId, (workspace) => workspace.directory);
   const paseo = usePaseo();
   const listScripts = useRpc(listNpmScriptsRpc);
+  const claimed = useRef(new Set<string>());
 
   const scripts = useQuery({
     queryKey: ["npm-scripts", workspaceId, directory],
@@ -30,11 +27,27 @@ export function NpmScriptsPanel({ workspaceId, theme }: PluginWorkspacePanelProp
 
   const run = useMutation({
     mutationFn: async ({ pkg, script }: RunRequest) => {
-      const terminal = await paseo.workspaces.ref(workspaceId).terminals.create({
-        name: pkg.path === "." ? script.name : `${pkg.path}/${script.name}`,
-        cwd: pkg.dir,
-      });
-      terminal.write(`${pkg.packageManager} run ${shellQuote(script.name)}`);
+      const workspace = paseo.workspaces.ref(workspaceId);
+      const name = scriptTerminalName(pkg);
+      const { entries } = await workspace.terminals.list();
+      let terminal = null;
+      for (const entry of entries) {
+        // why: only reuse terminals this plugin opened for this folder; other terminals give no idle signal.
+        if (entry.name !== name || entry.cwd !== pkg.dir || claimed.current.has(entry.id)) continue;
+        const handle = paseo.terminals.ref(entry);
+        const lines = await captureTail((start) => handle.capture({ start }));
+        if (isIdleCapture(lines)) {
+          terminal = handle;
+          break;
+        }
+      }
+      terminal ??= await workspace.terminals.create({ name, cwd: pkg.dir });
+      // why: a second click can capture before the shell echoes the first command, so hold the
+      // terminal until its screen shows that command.
+      claimed.current.add(terminal.id);
+      const claimedId = terminal.id;
+      setTimeout(() => claimed.current.delete(claimedId), 1000);
+      terminal.write(scriptCommand(pkg.packageManager, script.name));
       terminal.sendKeys(["Enter"]);
     },
   });

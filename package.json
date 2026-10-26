@@ -2,6 +2,7 @@
   "name": "paseo-npm-scripts",
   "private": true,
   "version": "0.0.0",
+  "description": "Lists and runs package.json scripts for the selected workspace from the Explorer sidebar.",
   "files": [
     "paseo-plugin.json",
     "OVERVIEW.md",
@@ -16,7 +17,7 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test server/npm-scripts.test.ts"
+    "test": "node --test server/npm-scripts.test.ts shared/terminal-reuse.test.ts"
   },
   "devDependencies": {
     "@getpaseo/plugin": "0.13.0",
